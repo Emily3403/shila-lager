@@ -1,0 +1,20 @@
+{% extends "global/base.html" %}
+{% load static %}
+
+{% block stylesheet %}
+    <link rel="stylesheet" href="{% static 'bestellung/style.css' %}">
+{% endblock %}
+
+{% block extra_header %}
+    {% url 'grihed_orders' as grihed_url %}
+    {% url 'bringmeister_orders' as bringmeister_url %}
+    {% url 'gepa_orders' as gepa_url %}
+    {% url 'hygienelager_orders' as hygienelager_url %}
+
+    <div class="sub-navbar navbar">
+        <a href="{{ grihed_url }}" class="{% if grihed_url in request.path %}active{% endif %}">Grihed</a>
+        <a href="{{ bringmeister_url }}" class="{% if bringmeister_url in request.path %}active{% endif %}">Bringmeister</a>
+        <a href="{{ bringmeister_url }}" class="{% if gepa_url in request.path %}active{% endif %}">Gepa</a>
+        <a href="{{ hygienelager_url }}" class="{% if hygienelager_url in request.path %}active{% endif %}">Hygienelager</a>
+    </div>
+{% endblock %}

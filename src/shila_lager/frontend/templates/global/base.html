@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'global/style.css' %}">
+
+    {% block stylesheet %}
+    {% endblock %}
+
+    {% block script %}
+    {% endblock %}
+
+    <title>{% block title %}{% endblock %}</title>
+</head>
+
+<body>
+
+{# Django does not support url `<>` in if statements, so they have to be stored in variables first https://docs.djangoproject.com/en/5.0/ref/templates/builtins/#url #}
+{% url 'bestellungen_index' as bestellungen_url %}
+{% url 'einzahlungen_index' as einzahlungen_url %}
+{% url 'stats_index' as stats_url %}
+<div class="top-navbar navbar nav">
+    <a href="{% url 'bestellungen_index' %}" class="{% if bestellungen_url in request.path %}active{% endif %}">Bestellungen</a>
+    <a href="{% url 'einzahlungen_index' %}" class="{% if einzahlungen_url in request.path %}active{% endif %}">Einzahlungen</a>
+    <a href="{% url 'stats_index' %}" class="{% if stats_url in request.path %}active{% endif %}">Stats</a>
+</div>
+
+{% block extra_header %}
+
+{% endblock %}
+
+{% block content %}
+
+{% endblock %}
+</body>
+</html>

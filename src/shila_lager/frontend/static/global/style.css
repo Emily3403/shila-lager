@@ -1,0 +1,133 @@
+/* styles.css */
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
+.top-navbar {
+    background-color: #f9f9f9;
+    overflow: hidden;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border-bottom: 1px solid #ccc;
+}
+
+.top-navbar a {
+    float: left;
+    display: block;
+    color: #333;
+    text-align: center;
+    padding: 14px 20px;
+    text-decoration: none;
+    font-size: 17px;
+}
+
+.top-navbar a:hover {
+    background-color: #e2e2e2;
+    color: #000;
+}
+
+.navbar {
+    background-color: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.navbar a {
+    float: left;
+    display: block;
+    color: #007BFF;
+    text-align: center;
+    padding: 14px 20px;
+    text-decoration: none;
+    font-size: 17px;
+}
+
+.navbar a:hover {
+    background-color: #ddd;
+    color: black;
+}
+
+.active {
+    color: #007BFF; /* Bright blue or any color that stands out */
+    background-color: #e2e2e2; /* Light grey background for contrast */
+}
+
+header {
+    background: #ffffff;
+    padding: 20px 20px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+h1 {
+    margin: 0;
+    /*color: #007BFF; !* Bright blue for a bit of color *!*/
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    margin-bottom: 15px; /* Add space below the table */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+th, td {
+    text-align: left;
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f9f9f9;
+}
+
+input[type="number"], button {
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+}
+
+input[type="number"] {
+    width: 70%;
+}
+
+button {
+    background-color: #007BFF;
+    color: #fff;
+    cursor: pointer;
+    border: none;
+    margin-right: 15px;
+    float: right;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+footer {
+    text-align: center;
+    padding: 15px 0;
+    background-color: #ffffff;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 0 10px;
+    }
+
+    table, input[type="number"], button {
+        width: 100%;
+    }
+}
