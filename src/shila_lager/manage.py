@@ -3,9 +3,13 @@
 import os
 import sys
 
+from shila_lager.utils import startup
+
 
 def main() -> None:
     """Run administrative tasks."""
+    startup()
+
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shila_lager.settings')
     try:
         from django.core.management import execute_from_command_line

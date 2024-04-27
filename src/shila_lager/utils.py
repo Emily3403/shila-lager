@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import os
-from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
 from asyncio import AbstractEventLoop, get_event_loop
 from pathlib import Path
 from typing import TypeVar, Callable, Iterable
 
-from shila_lager.settings import is_linux, is_macos, is_testing, is_windows, working_dir_location, database_url
+from shila_lager.settings import is_linux, is_macos, is_windows, working_dir_location, database_url, manual_upload_dir, temp_saved_invoices_dir
 from shila_lager.version import __version__
 
 
@@ -28,36 +26,14 @@ def print_version() -> None:
 
 def startup() -> None:
     """The startup routine to ensure a valid directory structure"""
-    os.makedirs(fs_path(), exist_ok=True)
+    fs_path().mkdir(exist_ok=True)
+    manual_upload_dir.mkdir(exist_ok=True)
+    temp_saved_invoices_dir.mkdir(exist_ok=True)
 
 
 def fs_path(*args: str | Path) -> Path:
     """Prepend the args with the dedicated eet_backend directory"""
     return Path(working_dir_location, *args)
-
-
-def parse_args() -> Namespace:
-    """Parse the command line arguments"""
-    parser = ArgumentParser(prog="shila_lager", formatter_class=RawTextHelpFormatter, description="""Shila Lager""")
-
-    # Arguments that you can always add
-    parser.add_argument("-v", "--verbose", help="Make the application more verbose", action="count", default=0)  # TODO: Is default needed?
-    parser.add_argument("-d", "--debug", help="Debug the application", action="store_true")
-
-    # Mutually exclusive arguments
-    operations = parser.add_mutually_exclusive_group()
-    operations.add_argument("-V", "--version", help="Print the version number and exit", action="store_true")
-
-    if is_testing:
-        # Pytest adds extra arguments that don't fit into the defined schema.
-        return parser.parse_known_args()[0]
-
-    parsed_args = parser.parse_args()
-    # Now modify the arguments based on each other
-    if parsed_args.debug:
-        parsed_args.verbose = 3
-
-    return parsed_args
 
 
 # --- More or less useful functions ---
@@ -134,8 +110,3 @@ class HumanBytes:
 T = TypeVar("T")
 U = TypeVar("U")
 KT = TypeVar("KT")
-
-startup()
-program_args = parse_args()
-
-DEBUG_ASSERTS = program_args.debug

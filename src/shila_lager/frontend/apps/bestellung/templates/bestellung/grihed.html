@@ -12,16 +12,16 @@
     </header>
 
     <main>
-        <form method="post">
+        <form method="post" id="grihed_form">
             {% csrf_token %}
             <table>
                 <thead>
                 <tr>
                     <th>Name</th>
                     <th>Aktuell auf Lager</th>
+                    <th>Extra</th>
                     <th>Soll im Lager</th>
                     <th>Zu Bestellen</th>
-                    <th>Aktueller Wert</th>
                     <th>Kostet</th>
                 </tr>
                 </thead>
@@ -31,18 +31,18 @@
                     <tr>
                         <td>{{ beverage.name }}</td>
                         <td>
-                            <input type="number" name="current_stock_{{ beverage.grihed_id }}" value="{{ beverage.inventory.current_stock }}" min="0"
-                                   onchange="calculateOrder('{{ beverage.grihed_id }}', {{ beverage.price }}, {{ beverage.inventory.should_be_in_stock }}, true)">
+                            <input type="number" name="current_stock_{{ beverage.grihed_id }}" value="{{ beverage.inventory.current_stock }}" min="0" tabindex=1
+                                   onchange="calculateOrder('{{ beverage.grihed_id }}', {{ beverage.price }}, {{ beverage.inventory.should_be_in_stock }})">
+                        </td>
+                        <td>
+                            <input type="number" name="extra_order_qty_{{ beverage.grihed_id }}" value="0" min="0"
+                                   onchange="calculateOrder('{{ beverage.grihed_id }}', {{ beverage.price }}, {{ beverage.inventory.should_be_in_stock }})">
                         </td>
                         <td>{{ beverage.inventory.should_be_in_stock }}</td>
-                        <td>
-                            <input type="number" name="order_qty_{{ beverage.grihed_id }}" value="0" min="0"
-                                   onchange="calculateOrder('{{ beverage.grihed_id }}', {{ beverage.price }}, {{ beverage.inventory.should_be_in_stock }}, false)">
-                        </td>
-                        <td id="stock_value_{{ beverage.grihed_id }}"></td>
+                        <td id="order_qty_{{ beverage.grihed_id }}"></td>
                         <td id="price_{{ beverage.grihed_id }}"></td>
                     </tr>
-                    <script>calculateOrder('{{ beverage.grihed_id }}', {{ beverage.price }}, {{ beverage.inventory.should_be_in_stock }}, true)</script>
+                    <script>calculateOrder('{{ beverage.grihed_id }}', {{ beverage.price }}, {{ beverage.inventory.should_be_in_stock }})</script>
                 {% endfor %}
                 </tbody>
 

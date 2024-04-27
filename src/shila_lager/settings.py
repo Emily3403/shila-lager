@@ -18,7 +18,11 @@ def error_exit(code: int, reason: str) -> NoReturn:
 # --- General settings ---
 
 # The directory where everything lives in.
-working_dir_location = Path(os.path.dirname(__file__), "resources")
+user_set_working_dir = os.environ.get("SHILA_LAGER_WORKING_DIR")
+working_dir_location = Path(user_set_working_dir).expanduser() if user_set_working_dir is not None else Path(os.path.expanduser("~"), "shila-lager")
+
+manual_upload_dir = working_dir_location / "manual_uploads"
+temp_saved_invoices_dir = working_dir_location / "temp_saved_invoices"
 
 # A constant to detect if you are on Linux.
 is_linux = platform.system() == "Linux"
@@ -83,17 +87,20 @@ APP_DIR = FRONTEND_DIR / "apps"
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!  TODO: Log an error if no secret key is provided
-SECRET_KEY = os.environ.get("SECRET_KEY") or "django-insecure-w9n&-4vb#dkay9*856z6b$@k(f+j82-ayp^_xj5-qkt9cnfv7d"
+SECRET_KEY = os.environ.get("SHILA_LAGER_SECRET_KEY") or "django-insecure-w9n&-4vb#dkay9*856z6b$@k(f+j82-ayp^_xj5-qkt9cnfv7d"
 
 # SECURITY WARNING: don"t run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = os.environ.get("SERVER_NAMES", "").split(" ")
+ALLOWED_HOSTS = os.environ.get("SHILA_LAGER_SERVER_NAMES", "").split(" ")
 
 # Application definition
 
 INSTALLED_APPS = [
     "shila_lager.frontend.apps.bestellung.apps.LagerConfig",
+    "shila_lager.frontend.apps.einzahlungen.apps.EinzahlungenConfig",
+    "shila_lager.frontend.apps.rechnungen.apps.RechnungenConfig",
+    "shila_lager.frontend.apps.stats.apps.StatsConfig",
 
     "django.contrib.admin",
     "django.contrib.auth",
@@ -139,8 +146,23 @@ WSGI_APPLICATION = "shila_lager.frontend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": SOURCE_DIR / "resources" / "state.db",
+        "NAME": working_dir_location / "state.db",
     }
+}
+
+# Storage
+# https://docs.djangoproject.com/en/5.0/ref/settings/#storages
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": working_dir_location / "uploads",
+            "base_url": "/uploads/",
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
 }
 
 # Password validation
@@ -175,7 +197,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STATICFILES_DIRS = [ FRONTEND_DIR / "static" ]
+STATICFILES_DIRS = [FRONTEND_DIR / "static"]
 STATIC_URL = "static/"
 
 # Default primary key field type

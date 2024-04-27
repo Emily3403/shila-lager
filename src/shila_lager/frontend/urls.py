@@ -23,6 +23,7 @@ from shila_lager.frontend.apps.bestellung import views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("rechnungen/", include("shila_lager.frontend.apps.rechnungen.urls")),
     path("bestellung/", include("shila_lager.frontend.apps.bestellung.urls")),
     path("einzahlungen/", include("shila_lager.frontend.apps.einzahlungen.urls")),
     path("stats/", include("shila_lager.frontend.apps.stats.urls")),

@@ -29,7 +29,7 @@ class BeverageCrate(Model):
     inventory: CrateInventory
 
     def __str__(self) -> str:
-        return self.name
+        return f"{self.grihed_id} {self.name}"
 
     @property
     def total_price(self) -> Decimal:
