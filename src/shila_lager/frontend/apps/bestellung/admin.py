@@ -4,4 +4,3 @@ from shila_lager.frontend.apps.bestellung.models import BeverageCrate, CrateInve
 
 admin.site.register(BeverageCrate)
 admin.site.register(CrateInventory)
-

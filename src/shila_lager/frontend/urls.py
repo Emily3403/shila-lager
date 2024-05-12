@@ -18,9 +18,6 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import RedirectView
 
-from shila_lager.frontend.apps import bestellung
-from shila_lager.frontend.apps.bestellung import views
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("rechnungen/", include("shila_lager.frontend.apps.rechnungen.urls")),

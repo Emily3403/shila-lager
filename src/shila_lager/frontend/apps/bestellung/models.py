@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.db.models import Model, CharField, TextChoices, DecimalField, IntegerField, CASCADE, OneToOneField, ForeignKey, DateField, DateTimeField
+from django.db.models import Model, CharField, TextChoices, DecimalField, IntegerField, CASCADE, OneToOneField, ForeignKey, DateTimeField
 from django_stubs_ext.db.models.manager import RelatedManager
 
 if TYPE_CHECKING:
-    from shila_lager.frontend.apps.rechnungen.models import GrihedInvoiceItem, GrihedInvoice
+    from shila_lager.frontend.apps.rechnungen.models import GrihedInvoiceItem
 
 
 class BottleType(TextChoices):
@@ -73,7 +73,7 @@ class CrateInventory(Model):
     current_stock = IntegerField()
     should_be_in_stock = IntegerField()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.crate.name} Inventory"
 
 
@@ -86,7 +86,9 @@ class SalePrice(Model):
     price = DecimalField(max_digits=4, decimal_places=2)
     valid_from = DateTimeField()
 
-    def __str__(self):
+    crate_id: str
+
+    def __str__(self) -> str:
         return f"{self.crate_id} Sale Price"
 
 
@@ -100,5 +102,7 @@ class GrihedPrice(Model):
     deposit = DecimalField(max_digits=8, decimal_places=2)
     valid_from = DateTimeField()
 
-    def __str__(self):
+    crate_id: str
+
+    def __str__(self) -> str:
         return f"{self.crate_id} Grihed Price"

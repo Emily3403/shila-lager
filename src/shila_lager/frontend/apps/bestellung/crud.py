@@ -31,6 +31,7 @@ def get_sorted_grihed_prices() -> defaultdict[str, list[GrihedPrice]]:
 
     return all_prices
 
+
 def get_sorted_sale_prices() -> defaultdict[str, list[SalePrice]]:
     _prices: QuerySet[SalePrice] = SalePrice.objects.all()
     all_prices = defaultdict(lambda: [])
@@ -44,6 +45,6 @@ def get_sorted_sale_prices() -> defaultdict[str, list[SalePrice]]:
 
 
 def create_grihed_price(crate_id: str, price: Decimal, deposit: Decimal, valid_from: datetime) -> GrihedPrice:
-    price = GrihedPrice(crate_id=crate_id, price=price, deposit=deposit, valid_from=valid_from)
-    price.save()
-    return price
+    grihed_price = GrihedPrice(crate_id=crate_id, price=price, deposit=deposit, valid_from=valid_from)
+    grihed_price.save()
+    return grihed_price

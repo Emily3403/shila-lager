@@ -3,11 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
+
 from math import isclose
 
 from shila_lager.frontend.apps.bestellung.crud import get_sorted_grihed_prices, create_grihed_price, get_beverage_crates, create_beverage_crate, get_sorted_sale_prices
 from shila_lager.frontend.apps.bestellung.models import BottleType, GrihedPrice, SalePrice
-from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice, GrihedInvoiceItem
+from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice, GrihedInvoiceItem, ShilaAccountBooking
+from shila_lager.settings import logger
+from shila_lager.utils import german_price_to_decimal
 
 sale_price_translation = price_translation = {
     ("B0991", "Allgäuer Büble Edelbräu"): 1.5 * 20,
@@ -76,7 +79,7 @@ sale_price_translation = price_translation = {
 
 # TODO: Refactor this into a more general approach for prices
 def maybe_create_grihed_price(prices: defaultdict[str, list[GrihedPrice]], beverage_id: str, price: Decimal, deposit: Decimal, date: datetime) -> GrihedPrice:
-    def create_price():
+    def create_price() -> GrihedPrice:
         final_price = create_grihed_price(beverage_id, price, deposit, date)
         prices[beverage_id].append(final_price)
         prices[beverage_id].sort(key=lambda it: it.valid_from, reverse=True)
@@ -107,7 +110,7 @@ def maybe_create_sale_price(prices: defaultdict[str, list[SalePrice]], beverage_
     if price is None:
         raise ValueError(f"No price found for beverage {beverage_id} {beverage_name}")
 
-    def create_price():
+    def create_price() -> SalePrice:
         final_price = SalePrice(crate_id=beverage_id, price=price, valid_from=valid_from)
         final_price.save()
         prices[beverage_id].append(final_price)
@@ -133,7 +136,8 @@ def maybe_create_sale_price(prices: defaultdict[str, list[SalePrice]], beverage_
 
     return create_price()
 
-def create_invoice(invoice_number: str, date: datetime, total_price: float, items: list[tuple[str, str, str, str, str, str, str, str]]) -> GrihedInvoice:
+
+def create_invoice(invoice_number: str, date: datetime, total_price: Decimal, items: list[tuple[str, str, str, str, str, str, str, str]]) -> GrihedInvoice:
     invoice, _ = GrihedInvoice.objects.update_or_create(invoice_number=invoice_number, date=date, total_price=total_price)
     invoice.save()
 
@@ -146,9 +150,13 @@ def create_invoice(invoice_number: str, date: datetime, total_price: float, item
 
         quantity = int(1 if _quantity == "####" else _quantity)
         beverage_id = _beverage_id.replace(" ", "")
-        deposit = Decimal(_deposit.replace(".", "_").replace(",", "."))
-        total = Decimal(_total.replace(".", "_").replace(",", "."))
-        price = Decimal(_price.replace(".", "_").replace(",", ".")) if _quantity != "####" else total
+        deposit = german_price_to_decimal(_deposit)
+        total = german_price_to_decimal(_total)
+        price = german_price_to_decimal(_price) if _quantity != "####" else total
+
+        if price is None or deposit is None or total is None:
+            logger.error(f"Price could not be parsed in {invoice_number} for {name}")
+            continue
 
         beverage = beverages.get(beverage_id) or create_beverage_crate(beverage_id, name, content, BottleType.from_str(bottle_type))
         grihed_price = maybe_create_grihed_price(grihed_prices, beverage_id, price, deposit, date)
@@ -160,6 +168,10 @@ def create_invoice(invoice_number: str, date: datetime, total_price: float, item
         invoice_item.save()
 
         if invoice_item.calculated_total_price != total:
-            print(f"Total price mismatch in {invoice_number} for {name}")
+            logger.error(f"Total price mismatch in {invoice_number} for {name}")
 
     return invoice
+
+
+def get_shila_account_bookings() -> set[ShilaAccountBooking]:
+    return set(ShilaAccountBooking.objects.all())

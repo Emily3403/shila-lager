@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging.config
 import os
 import platform
 import sys
@@ -206,3 +207,42 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # -/- Django Configuration -/-
+
+# --- Logging Configuration ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+
+    "formatters": {
+        "simple": {
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        },
+    },
+
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+    },
+
+    "loggers": {
+        "root": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "shila-lager": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+    },
+}
+
+logging.config.dictConfig(LOGGING)
+logger = logging.getLogger("shila-lager")

@@ -3,22 +3,22 @@ from __future__ import annotations
 import re
 import time
 from datetime import datetime
-from math import isclose
 from pathlib import Path
 
 import pytz
+from math import isclose
 from pypdf import PdfReader
 
-from shila_lager.frontend.apps.bestellung.models import BeverageCrate, SalePrice
 from shila_lager.frontend.apps.rechnungen.crud import create_invoice
 from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice
-from shila_lager.settings import manual_upload_dir
+from shila_lager.settings import manual_upload_dir, logger
+from shila_lager.utils import german_price_to_decimal
 
 invoice_number_regex = re.compile(r"Rechnung-Nr:\s*(\d+)\s*–\s*(\d+)")
 date_regex = re.compile(r"Liefertag:\s*(\d{2}\.\d{2}\.\d{4})")
 total_price_regex = re.compile(r"Zahlbetrag:\s*(-?(?:\d*\.)?\d+,\d+) €")
 
-# This is a horrendous regex, but it works for now. It is very unreadable and should be refactored.
+# This is a okay-ish regex for parsing the items from the PDF. It gets the job done and is not too unreadable.
 # @formatter:off
 item_regex = re.compile((
     r"\s*(\d+|####)\s+"  # Quantity (Menge)
@@ -45,35 +45,25 @@ def import_grihed_pdf(pdf_path: Path) -> GrihedInvoice | None:
 
     invoice_number = invoice_numbers.group(1) + "-" + invoice_numbers.group(2)
     date = pytz.UTC.localize(datetime.strptime(_date.group(1), "%d.%m.%Y"))
-    total_price = float(_total_price.group(1).replace(".", "_").replace(",", "."))
+    total_price = german_price_to_decimal(_total_price.group(1))
+    if total_price is None:
+        logger.error(f"Total price could not be parsed in {pdf_path}")
+        return None
 
     invoice = create_invoice(invoice_number, date, total_price, unparsed_items)
     if not isclose(sum(item.calculated_total_price for item in invoice.items.all()), total_price):
-        print(f"Total price mismatch in {pdf_path}")
+        logger.error(f"Total price mismatch in {pdf_path}")
         for item in invoice.items.all():
-            print(f"{item.quantity}x {item.name} for {item.calculated_total_price}€")
+            logger.error(f"{item.quantity}x {item.name} for {item.calculated_total_price}€")
         return None
 
     return invoice
 
 
-def import_all_grihed_pdfs():
-    # manual_upload_dir is the dir where the PDFs are stored.
+def import_all_grihed_pdfs() -> None:
     s = time.perf_counter()
     items = []
     for pdf_path in (manual_upload_dir / "Grihed").iterdir():
         items.append(import_grihed_pdf(pdf_path))
 
-    print(f"{time.perf_counter() - s:3f}s")
-
-
-def import_sale_prices():
-
-    beverage_crates: list[BeverageCrate] = sorted(BeverageCrate.objects.all(), key=lambda it: it.name)
-
-    for crate in beverage_crates:
-        if (price := price_translation.get((crate.id, crate.name))) is not None:
-            sale_price, _ = SalePrice.objects.update_or_create(crate=crate, price=price, valid_from=pytz.UTC.localize(datetime.strptime("01.01.2023", "%d.%m.%Y")))
-            sale_price.save()
-        else:
-            print(f"Missing price for {crate.id} {crate.name}")
+    print(f"Importing all Grihed PDFs ({len(items)}) took {time.perf_counter() - s:3f}s")

@@ -2,11 +2,11 @@ from typing import Any
 
 from django.core.management import BaseCommand
 
-from shila_lager.frontend.apps.rechnungen.parser.grihed_pdf_parser import import_all_grihed_pdfs
+from shila_lager.frontend.apps.rechnungen.parser.sparkasse_csv_parser import import_bookings
 
 
 class Command(BaseCommand):
-    help = 'Analyze PDFs'
+    help = 'Import sale prices'
 
     def handle(self, *args: Any, **options: Any) -> None:
-        import_all_grihed_pdfs()
+        import_bookings()

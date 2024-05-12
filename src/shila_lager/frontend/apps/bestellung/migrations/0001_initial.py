@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -18,7 +17,9 @@ class Migration(migrations.Migration):
                 ('id', models.CharField(max_length=64, primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=256)),
                 ('content', models.CharField(max_length=64)),
-                ('bottle_type', models.CharField(choices=[('glass', 'Glass Bottle'), ('single_glass_bottle', 'Single Glass Bottle'), ('plastic', 'Pet Plastic'), ('tetra_pack', 'Tetra Pack'), ('package', 'Package'), ('crate_return', 'Crate Return'), ('bonus_credit', 'Bonus Credit'), ('unknown', 'Unknown')], default='glass', max_length=64)),
+                ('bottle_type',
+                 models.CharField(choices=[('glass', 'Glass Bottle'), ('single_glass_bottle', 'Single Glass Bottle'), ('plastic', 'Pet Plastic'), ('tetra_pack', 'Tetra Pack'), ('package', 'Package'), ('crate_return', 'Crate Return'), ('bonus_credit', 'Bonus Credit'), ('unknown', 'Unknown')],
+                                  default='glass', max_length=64)),
             ],
             options={
                 'verbose_name_plural': 'Beverage Crates',

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 from asyncio import AbstractEventLoop, get_event_loop
+from decimal import Decimal
 from pathlib import Path
 from typing import TypeVar, Callable, Iterable
 
@@ -103,6 +104,16 @@ class HumanBytes:
 
         n, unit = HumanBytes.format(num)
         return f"{f'{n:.2f}'.rjust(6)} {unit}"
+
+
+def german_price_to_decimal(price: str) -> Decimal | None:
+    if not price:
+        return None
+
+    try:
+        return Decimal(price.replace(".", "_").replace(",", "."))
+    except Exception:
+        return None
 
 
 # -/- More or less useful functions ---
