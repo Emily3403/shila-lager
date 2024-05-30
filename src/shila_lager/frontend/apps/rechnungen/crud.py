@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-
 from math import isclose
 
 from shila_lager.frontend.apps.bestellung.crud import get_sorted_grihed_prices, create_grihed_price, get_beverage_crates, create_beverage_crate, get_sorted_sale_prices
@@ -12,15 +11,20 @@ from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice, GrihedInv
 from shila_lager.settings import logger
 from shila_lager.utils import german_price_to_decimal
 
-sale_price_translation = price_translation = {
+sale_price_translation = {
     ("B0991", "Allgäuer Büble Edelbräu"): 1.5 * 20,
     ("B0995", "Andechs Spezial hell 0,50l"): 1.5 * 20,
     ("B0996", "Astra Urtyp Pils 0,33l"): 1 * 27,
     ("S2247", "Becker Maracuja 1,0l Tetra"): 3 * 6,
+    ("S2175", "aro Orangensaft 100%"): 3 * 8,
+    ("E3122", "Bionade Holunder 0,33l  12er"): 1 * 12,
+    ("E3125", "Bionade Kräuter 0,33l  12er"): 1 * 12,
+    ("E3126", "Bionade Litschi 0,33l  12er"): 1 * 12,
     ("E3127", "Bionade  Zitr.Bergamotte 0,33l  12er"): 1 * 12,
     ("E3128", "Bionade Mix (Hol/Ing/Kr/Lit.) 0,33l  12er"): 1 * 12,
     ("E3130", "Bionade naturtrübe Orange 0,33l  12er"): 1 * 12,
     ("E3132", "Bionade naturtrübe Zitrone 0,33l  12er"): 1 * 12,
+    ("E3224", "Brandenburger Apfelschorle (Glas)"): 1 * 12,
     ("B1035", "Berliner Kindl Jubiläums Pilsener 0,33l"): 1 * 24,
     ("B1040", "Berliner Kindl Jubiläums Pilsener 0,50l"): 1.5 * 20,
     ("B1047", "Berliner Kindl Radler (trüb)"): 1 * 20,
@@ -30,6 +34,7 @@ sale_price_translation = price_translation = {
     ("W8033", "Chardonnay IGT Mezzadro"): 6,
     ("B1345", "Clausthaler Extra Herb Alkoholfrei 0,50l"): 1 * 20,
     ("E3438", "Club Mate"): 1 * 20,
+    ("E3445", "Club Mate Granatapfel"): 1 * 20,
     ("E3351", "Fritz Bio-Apfelsaftschorle 0,33l"): 1.2 * 24,
     ("E3354", "Fritz Bio-Rhabarbersaftschorle 0,33l"): 1.2 * 24,
     ("E3347", "Fritz Zitrone 0,33l"): 1.2 * 24,
@@ -41,6 +46,7 @@ sale_price_translation = price_translation = {
     ("B1357", "Jever Fun 0,50l"): 1 * 20,
     ("B1165", "Jever Pils 0,50l"): 1.5 * 20,
     ("W8025", "Kimmle Riesling  6 x 1,0l (weiss) Mehrweg"): 6 * 6,
+    ("A0101", "Abhol. Leihware/Leerg./Kommission"): 12.50,
     ("L0150", "Leergutkasten komplett"): 1.5,
     ("L0310", "Leergutkasten komplett"): 3.1,
     ("L0330", "Leergutkasten komplett"): 3.3,
@@ -51,6 +57,7 @@ sale_price_translation = price_translation = {
     ("L0510", "Leergutkasten komplett"): 5.1,
     ("L0650", "Leergutkasten komplett"): 6.5,
     ("L0300", "Leergutkasten komplett"): 3,
+    ("L0246", "Leergutkasten komplett"): 2.46,
     ("W8019", "Leoff Riesling, trocken"): 6,
     ("W8017", "Leoff gr. Burgunder, trocken"): 6,
     ("W8021", "Leoff weisser Burgunder, trocken"): 6,
@@ -72,6 +79,7 @@ sale_price_translation = price_translation = {
     ("O7060", "Söhnlein Brillant Jahrgangssekt trocken,11%"): 6,
     ("E3450", "Th. Henry Mate Mate"): 1 * 20,
     ("B1278", "Wicküler Pilsener 0,50l"): 1 * 20,
+    ("W8900", "Wodka Gorbatschow 37,5%"): 9,
     ("K5230", "aro Zucker Kg-Packung"): 0,
     ("L0008", "leere Einzelflasche Mw (Bier)"): 0.08,
 }
@@ -158,12 +166,12 @@ def create_invoice(invoice_number: str, date: datetime, total_price: Decimal, it
             logger.error(f"Price could not be parsed in {invoice_number} for {name}")
             continue
 
-        beverage = beverages.get(beverage_id) or create_beverage_crate(beverage_id, name, content, BottleType.from_str(bottle_type))
+        beverage = beverages.get(beverage_id) or create_beverage_crate(beverage_id, name, content, BottleType.from_str(bottle_type, beverage_id))
         grihed_price = maybe_create_grihed_price(grihed_prices, beverage_id, price, deposit, date)
         sale_price = maybe_create_sale_price(sale_prices, beverage_id, name, date)
 
         invoice_item, _ = GrihedInvoiceItem.objects.update_or_create(
-            quantity=int(quantity), name=name, total_price=total, invoice=invoice, beverage=beverage, purchase_price=grihed_price, sale_price=sale_price
+            quantity=int(quantity), total_price=total, invoice=invoice, beverage=beverage, purchase_price=grihed_price, sale_price=sale_price
         )
         invoice_item.save()
 

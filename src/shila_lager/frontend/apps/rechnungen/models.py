@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import re
+from datetime import date
 from decimal import Decimal
+from enum import Enum
+from math import isclose
 from typing import TYPE_CHECKING, Any
 
-from django.db.models import Model, DecimalField, CharField, DateField, ForeignKey, IntegerField, RESTRICT, DateTimeField, TextChoices
-from math import isclose
+from django.db.models import Model, DecimalField, CharField, DateField, ForeignKey, IntegerField, RESTRICT, TextChoices
 
 from shila_lager.frontend.apps.bestellung.models import BeverageCrate, GrihedPrice, SalePrice
+from shila_lager.settings import logger
 
 if TYPE_CHECKING:
     from django.db.models.fields.related_descriptors import RelatedManager
@@ -18,10 +22,16 @@ class GrihedInvoice(Model):
         verbose_name_plural = "Grihed Invoices"
 
     invoice_number = CharField(max_length=64, primary_key=True)
-    date = DateTimeField()
+    date = DateField()
     total_price = DecimalField(max_digits=16, decimal_places=2)
 
     items: RelatedManager[GrihedInvoiceItem]
+
+    def __str__(self) -> str:
+        return f"{self.invoice_number} from {self.date}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class GrihedInvoiceItem(Model):
@@ -30,7 +40,6 @@ class GrihedInvoiceItem(Model):
         unique_together = ("invoice", "beverage")
 
     quantity = IntegerField()
-    name = CharField(max_length=256)
     total_price = DecimalField(max_digits=16, decimal_places=2)
 
     invoice = ForeignKey(GrihedInvoice, on_delete=RESTRICT, related_name="items")
@@ -43,7 +52,7 @@ class GrihedInvoiceItem(Model):
         return (self.purchase_price.price + self.purchase_price.deposit) * self.quantity
 
     def __str__(self) -> str:
-        return f"InvoiceItem for {self.quantity}x {self.name}"
+        return f"InvoiceItem for {self.quantity}x {self.beverage.name}"
 
 
 class ShilaTransactionPeers(TextChoices):
@@ -118,6 +127,16 @@ class ShilaBookingKind(TextChoices):
                 raise ValueError(f"Unknown booking kind {kind}")
 
 
+class ShilaBookingCategory(Enum):
+    beverages = "Getränke"
+    gepa = "GEPA"
+    bringmeister = "Bringmeister"
+    chocholate = "Schokolade"
+    dm = "DM"
+    hosting = "Hosting"
+    other = "Sonstiges"
+
+
 class ShilaAccountBooking(Model):
     class Meta:
         verbose_name_plural = "Shila Account Bookings"
@@ -170,3 +189,52 @@ class ShilaAccountBooking(Model):
             self.currency == other.currency and
             self.additional_info == other.additional_info
         )
+
+    def actual_booking_date(self) -> date:
+        if self.beneficiary_or_payer != "GRIHED Service GmbH":
+            return self.booking_date
+
+        matched_date = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", self.description)
+        if matched_date is None:
+            logger.error(f"Could not find a date in {self.description}")
+            return self.booking_date
+
+        return date(*map(int, reversed(matched_date.groups())))
+
+    @property
+    def category(self) -> ShilaBookingCategory:
+        match self.beneficiary_or_payer:
+            case "GRIHED Service GmbH" | "Team Getraenke Lieferdienste TGL GmbH":
+                return ShilaBookingCategory.beverages
+            case "GEPA MBH" | "GEPA mbH" | "GEPA mbh" | "Cafe Libertad Kollektiv eG":
+                return ShilaBookingCategory.gepa
+            case "PLANT-FOR-THE-PLANET" | "THE GOOD SHOP by Stripe via PPRO":
+                return ShilaBookingCategory.chocholate
+            case "DM-drogerie markt":
+                return ShilaBookingCategory.dm
+            case "Jonas Pasche" | "Hetzner Online GmbH":
+                return ShilaBookingCategory.hosting
+            case _:
+                if self.description == "Entgeltabrechnung siehe Anlage ":
+                    return ShilaBookingCategory.other
+
+                if "Flaschenpost" in self.description:
+                    return ShilaBookingCategory.beverages
+                if "Bringmeister" in self.description or "Metro" in self.description:
+                    return ShilaBookingCategory.bringmeister
+
+                return ShilaBookingCategory.other
+
+
+class ShilaInventoryCount(Model):
+    class Meta:
+        verbose_name_plural = "Shila Inventory Counts"
+
+    # TODO
+    date = DateField()
+
+    def __str__(self) -> str:
+        return f"Inventory Count {self.date}"
+
+    def __repr__(self) -> str:
+        return self.__str__()

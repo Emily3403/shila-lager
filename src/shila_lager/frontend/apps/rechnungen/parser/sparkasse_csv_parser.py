@@ -14,6 +14,7 @@ def import_booking_csv(csv_path: Path) -> list[ShilaAccountBooking] | None:
         logger.error(f"{csv_path} is not a CSV file")
         return None
 
+    # TODO: Support ISO-8859-1 and other encodings
     with open(csv_path, "r") as f:
         reader = csv.reader(f, delimiter=";", quotechar='"')
         header = next(reader, None)
@@ -61,6 +62,7 @@ def import_booking_csv(csv_path: Path) -> list[ShilaAccountBooking] | None:
 
         if booking not in existing_bookings:
             bookings_to_create.append(booking)
+            existing_bookings.add(booking)
 
     return ShilaAccountBooking.objects.bulk_create(bookings_to_create)
 

@@ -4,6 +4,7 @@ import logging.config
 import os
 import platform
 import sys
+from decimal import Decimal
 from pathlib import Path
 from typing import NoReturn
 
@@ -22,8 +23,8 @@ def error_exit(code: int, reason: str) -> NoReturn:
 user_set_working_dir = os.environ.get("SHILA_LAGER_WORKING_DIR")
 working_dir_location = Path(user_set_working_dir).expanduser() if user_set_working_dir is not None else Path(os.path.expanduser("~"), "shila-lager")
 
-manual_upload_dir = working_dir_location / "manual_uploads"
-temp_saved_invoices_dir = working_dir_location / "temp_saved_invoices"
+manual_upload_dir = working_dir_location / "manual-uploads"
+plot_output_dir = working_dir_location / "plots"
 
 # A constant to detect if you are on Linux.
 is_linux = platform.system() == "Linux"
@@ -229,7 +230,7 @@ LOGGING = {
     "loggers": {
         "root": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "django": {
             "handlers": ["console"],
@@ -246,3 +247,7 @@ LOGGING = {
 
 logging.config.dictConfig(LOGGING)
 logger = logging.getLogger("shila-lager")
+
+# --- Grihed Options ---
+
+empty_crate_price = Decimal(1.5)

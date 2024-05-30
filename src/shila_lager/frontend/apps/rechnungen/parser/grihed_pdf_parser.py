@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 import time
 from datetime import datetime
+from math import isclose
 from pathlib import Path
 
 import pytz
-from math import isclose
 from pypdf import PdfReader
 
 from shila_lager.frontend.apps.rechnungen.crud import create_invoice
@@ -16,7 +16,7 @@ from shila_lager.utils import german_price_to_decimal
 
 invoice_number_regex = re.compile(r"Rechnung-Nr:\s*(\d+)\s*–\s*(\d+)")
 date_regex = re.compile(r"Liefertag:\s*(\d{2}\.\d{2}\.\d{4})")
-total_price_regex = re.compile(r"Zahlbetrag:\s*(-?(?:\d*\.)?\d+,\d+) €")
+total_price_regex = re.compile(r"(?:Zahlbetrag|Gutschriftsbetrag):\s*(-?(?:\d*\.)?\d+,\d+) €")
 
 # This is a okay-ish regex for parsing the items from the PDF. It gets the job done and is not too unreadable.
 # @formatter:off
@@ -24,7 +24,7 @@ item_regex = re.compile((
     r"\s*(\d+|####)\s+"  # Quantity (Menge)
     r"([A-Z]+ \d+)\s+"   # ID (ArtNr)
     r"([\w\W]*?)\s{2,}"  # Name (Artikelbezeichnung)
-    r"(\d+(?:[/\w,]*)? x \d+(?:,\d+\w)?(?:[/\w,]*)?)\s+"  # Content (Inhalt)
+    r"(\d+(?:[/\w,]*)? x \d+(?:,\d+\w)?(?:[/\w,]*)?|einfach)\s+"  # Content (Inhalt)
     r"([\w\s]*?)\s{2,}"  # Packaging (Gebinde)
     r"\d+ %\s+"          # Tax rate (St-Satz)
     r"(-?\d+,\d+) €\s+"  # Deposit (Pfand)
@@ -41,6 +41,7 @@ def import_grihed_pdf(pdf_path: Path) -> GrihedInvoice | None:
     invoice_numbers, _date, _total_price = invoice_number_regex.search(pdf), date_regex.search(pdf), total_price_regex.search(pdf)
     unparsed_items = item_regex.findall(pdf)
     if invoice_numbers is None or _date is None or _total_price is None or unparsed_items == []:
+        logger.error(f"Could not parse PDF {pdf_path}")
         return None
 
     invoice_number = invoice_numbers.group(1) + "-" + invoice_numbers.group(2)
@@ -54,7 +55,7 @@ def import_grihed_pdf(pdf_path: Path) -> GrihedInvoice | None:
     if not isclose(sum(item.calculated_total_price for item in invoice.items.all()), total_price):
         logger.error(f"Total price mismatch in {pdf_path}")
         for item in invoice.items.all():
-            logger.error(f"{item.quantity}x {item.name} for {item.calculated_total_price}€")
+            logger.error(f"{item.quantity}x {item.beverage.name} for {item.calculated_total_price}€")
         return None
 
     return invoice

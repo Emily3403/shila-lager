@@ -3,11 +3,14 @@ from __future__ import annotations
 import asyncio
 import itertools
 from asyncio import AbstractEventLoop, get_event_loop
+from datetime import datetime, date
 from decimal import Decimal
 from pathlib import Path
 from typing import TypeVar, Callable, Iterable
 
-from shila_lager.settings import is_linux, is_macos, is_windows, working_dir_location, database_url, manual_upload_dir, temp_saved_invoices_dir
+from numpy._typing import NDArray
+
+from shila_lager.settings import is_linux, is_macos, is_windows, working_dir_location, database_url, manual_upload_dir, plot_output_dir
 from shila_lager.version import __version__
 
 
@@ -29,7 +32,7 @@ def startup() -> None:
     """The startup routine to ensure a valid directory structure"""
     fs_path().mkdir(exist_ok=True)
     manual_upload_dir.mkdir(exist_ok=True)
-    temp_saved_invoices_dir.mkdir(exist_ok=True)
+    plot_output_dir.mkdir(exist_ok=True)
 
 
 def fs_path(*args: str | Path) -> Path:
@@ -114,6 +117,26 @@ def german_price_to_decimal(price: str) -> Decimal | None:
         return Decimal(price.replace(".", "_").replace(",", "."))
     except Exception:
         return None
+
+
+def filter_by_datetime(it: datetime, start: datetime | None, end: datetime | None) -> bool:
+    return (start is None or it >= start) and (end is None or it <= end)
+
+
+def filter_by_date(it: date, start: datetime | None, end: datetime | None) -> bool:
+    return (start is None or it >= start.date()) and (end is None or it <= end.date())
+
+
+def autopct_pie_format_with_number(values: NDArray[float], cond: Callable[[float], bool] | None = None, autopct: str = "%1.1f%%") -> Callable[[float], str]:
+    def my_format(pct: NDArray[float]) -> str:
+        total = sum(values)
+        val = pct * total / 100.0
+        fmt = autopct % pct
+        if cond is None or cond(val):
+            return fmt + f'\n{val:.0f}€'
+        return fmt
+
+    return my_format
 
 
 # -/- More or less useful functions ---
