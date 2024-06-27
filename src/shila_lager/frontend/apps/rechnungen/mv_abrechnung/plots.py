@@ -1,17 +1,16 @@
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from numbers import Number
-from typing import Any
+from typing import Any, DefaultDict, Iterable, Callable
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Arc
 
+from shila_lager.frontend.apps.rechnungen.beverage_facts import beverage_categories, meta_categories
 from shila_lager.frontend.apps.rechnungen.models import ShilaAccountBooking, GrihedInvoice, ShilaBookingCategory
 from shila_lager.frontend.apps.rechnungen.mv_abrechnung.data import AnalyzedBeverageCrate, group_invoices_by_time_interval
-from shila_lager.frontend.apps.rechnungen.mv_abrechnung.static_data import beverage_categories, meta_categories
 from shila_lager.settings import plot_output_dir
 from shila_lager.utils import flat_map, autopct_pie_format_with_number
 
@@ -117,8 +116,15 @@ def plot_bookings(all_bookings: list[ShilaAccountBooking], start: datetime | Non
     plt.fill_between(modified_dates, 0, modified_cum_balances, where=(modified_cum_balances < 0), color="red", alpha=0.4, step="post")
 
     plt.xticks(rotation=45)
-    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
-    plt.gca().yaxis.set_major_locator(plt.MultipleLocator(1000))
+    if end is None and start is None:
+        locator = mdates.MonthLocator()
+    elif ((end or datetime.now()) - (start or datetime.now())).days > 300:
+        locator = mdates.MonthLocator()
+    else:
+        locator = mdates.WeekdayLocator()
+
+    plt.gca().xaxis.set_major_locator(locator)
+    plt.gca().yaxis.set_major_locator(plt.MultipleLocator(1000))  # type:ignore[attr-defined]
     plt.savefig(plot_output_dir / f"shila{'_netto' if only_netto else ''}_kontostand_stairs.png", dpi=400, bbox_inches="tight")
 
     fill_plt_with_shila_events(True, start, end)
@@ -157,7 +163,10 @@ def plot_bookings_bar(all_bookings: list[ShilaAccountBooking], start: datetime |
 
 def plot_beverage_profit_and_turnover_piecharts(crates: list[AnalyzedBeverageCrate]) -> None:
     crates_by_id = {crate.id: crate for crate in crates}
-    category_profits, category_theoretical_profits, category_turnovers, category_colors = defaultdict(dict), defaultdict(dict), defaultdict(dict), {}
+    category_profits: DefaultDict[str, dict[str, Decimal]] = defaultdict(dict)
+    category_theoretical_profits: DefaultDict[str, dict[str, Decimal]] = defaultdict(dict)
+    category_turnovers: DefaultDict[str, dict[str, Decimal]] = defaultdict(dict)
+    category_colors: dict[str, str] = {}
     reverse_meta_categories = {category: meta_category for meta_category, (_, categories) in meta_categories.items() for category in categories}
 
     # TODO: Generalize this entire function across profits, theoretical and turnovers
@@ -171,20 +180,20 @@ def plot_beverage_profit_and_turnover_piecharts(crates: list[AnalyzedBeverageCra
     for meta_category, (_, categories) in meta_categories.items():
         for category in categories:
             color, ids = beverage_categories[category]
-            category_profits[meta_category][category] = sum(get_it(id, "total_profit") for id in ids)
-            category_theoretical_profits[meta_category][category] = sum(get_it(id, "total_theoretical_profit") for id in ids)
-            category_turnovers[meta_category][category] = sum(get_it(id, "total_turnover") for id in ids)
+            category_profits[meta_category][category] = Decimal(sum(get_it(id, "total_profit") for id in ids))
+            category_theoretical_profits[meta_category][category] = Decimal(sum(get_it(id, "total_theoretical_profit") for id in ids))
+            category_turnovers[meta_category][category] = Decimal(sum(get_it(id, "total_payed") for id in ids))
             category_colors[category] = color
 
     labels, profits = zip(*flat_map(lambda it: sorted(it.items(), key=lambda item: abs(item[1]), reverse=True), category_profits.values()))
-    theoretical_profits = [category_theoretical_profits[reverse_meta_categories[label]][label] for label in labels]
-    turnovers = [category_turnovers[reverse_meta_categories[label]][label] for label in labels]
+    theoretical_profits = [float(category_theoretical_profits[reverse_meta_categories[label]][label]) for label in labels]
+    turnovers = [float(category_turnovers[reverse_meta_categories[label]][label]) for label in labels]
     profit_colors, turnover_colors = [category_colors[category] for category in labels if category != "Soli"], [category_colors[category] for category in labels]
 
     # First plot: pie chart
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7))
 
-    def format_label(label: str, profit: Decimal, is_turnover: bool) -> str:
+    def format_label(label: str, profit: Decimal | float, is_turnover: bool) -> str:
         profit_str = f"{profit:.0f}€"
         if label in {"Wein", "Sekt", "Limo", "Wasser"}:
             return label
@@ -213,7 +222,7 @@ def plot_beverage_profit_and_turnover_piecharts(crates: list[AnalyzedBeverageCra
 
     # ax2.set_title("Ausgaben")
 
-    def draw_meta_category_border(ax: Any, wedges: Any, category_labels):
+    def draw_meta_category_border(ax: Any, wedges: Any, category_labels: Iterable[str]) -> None:
         for meta_category, (color, categories) in meta_categories.items():
             meta_indices = [i for i, label in enumerate(category_labels) if label in categories]
             if not meta_indices:
@@ -270,8 +279,8 @@ def plot_beverage_profit_and_turnover_piecharts(crates: list[AnalyzedBeverageCra
         ax.text(bar.get_x() + bar.get_width() / 2, yval + bar.get_y(), f"{yval:.2f}", va="bottom", ha="center")
 
     ax.set_title("Umsatz und Gewinn pro Kategorie")
-    ax.set_xticks(r)
-    ax.set_xticklabels(labels)
+    ax.set_xticks(r)  # type:ignore[operator]
+    ax.set_xticklabels(labels)  # type:ignore[operator]
     ax.legend()
     plt.tight_layout()
     plt.savefig(plot_output_dir / "gewinn_und_ausgaben_pro_getränk_bar.png", dpi=400, bbox_inches="tight")
@@ -282,7 +291,7 @@ def plot_beverage_consumption_over_time(invoices: list[GrihedInvoice]) -> None:
     grouped_invoices = group_invoices_by_time_interval(invoices, interval_days)
 
     dates = sorted(grouped_invoices.keys())
-    turnovers = [sum(float(it.total_turnover) for it in grouped_invoices[date]) for date in dates]
+    turnovers = [sum(float(it.total_payed) for it in grouped_invoices[date]) for date in dates]
     profits = [sum(float(it.total_profit) for it in grouped_invoices[date]) for date in dates]
 
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -293,7 +302,7 @@ def plot_beverage_consumption_over_time(invoices: list[GrihedInvoice]) -> None:
     plt.grid(True)
     plt.xticks(rotation=45)
     ax.xaxis.set_major_locator(mdates.MonthLocator())
-    ax.yaxis.set_major_locator(plt.MultipleLocator(1000))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1000))  # type:ignore[attr-defined]
     plt.tight_layout()
     plt.savefig(plot_output_dir / "gewinn_und_ausgaben_line.png", dpi=400, bbox_inches="tight")
 
@@ -308,13 +317,13 @@ def plot_beverage_consumption_over_time(invoices: list[GrihedInvoice]) -> None:
     plt.grid(True)
     plt.xticks(rotation=45)
     ax.xaxis.set_major_locator(mdates.MonthLocator())
-    ax.yaxis.set_major_locator(plt.MultipleLocator(500))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(500))  # type:ignore[attr-defined]
     plt.tight_layout()
     plt.savefig(plot_output_dir / "gewinn_pro_kategorie_line.png", dpi=400, bbox_inches="tight")
 
     fig, ax = plt.subplots(figsize=(12, 6))
     for category, (color, ids) in beverage_categories.items():
-        category_turnovers = [sum(float(it.total_turnover) for it in grouped_invoices[date] if it.id in ids) for date in dates]
+        category_turnovers = [sum(float(it.total_payed) for it in grouped_invoices[date] if it.id in ids) for date in dates]
         ax.plot(dates, category_turnovers, label=category, color=color)
 
     ax.set_title(f"Umsatz pro Kategorie (Intervall: {interval_days} tage)")
@@ -322,7 +331,7 @@ def plot_beverage_consumption_over_time(invoices: list[GrihedInvoice]) -> None:
     plt.grid(True)
     plt.xticks(rotation=45)
     ax.xaxis.set_major_locator(mdates.MonthLocator())
-    ax.yaxis.set_major_locator(plt.MultipleLocator(1000))
+    ax.yaxis.set_major_locator(plt.MultipleLocator(1000))  # type:ignore[attr-defined]
     plt.tight_layout()
     plt.savefig(plot_output_dir / "ausgaben_pro_kategorie_line.png", dpi=400, bbox_inches="tight")
 
@@ -346,13 +355,13 @@ def plot_shila_value(current_account_balance: Decimal, inventory_value_when_sold
 def plot_turnover_categories(_turnover_per_category: dict[ShilaBookingCategory, Decimal]) -> None:
     too_little_to_plot = {ShilaBookingCategory.hosting, ShilaBookingCategory.chocholate, ShilaBookingCategory.dm}
     turnover_per_category = {category.value: abs(float(turnover)) for category, turnover in _turnover_per_category.items() if category not in too_little_to_plot}
-    turnover_per_category[ShilaBookingCategory.other.value] += sum(float(_turnover_per_category[category]) for category in too_little_to_plot)
+    turnover_per_category[ShilaBookingCategory.other.value] += sum(float(_turnover_per_category.get(category, 0)) for category in too_little_to_plot)
     labels, values = zip(*reversed(sorted(turnover_per_category.items(), key=lambda it: it[1], reverse=True)))
 
     colors = ["forestgreen", "gold", "red", "#4774ee"]
 
-    def autopct(values: NDArray[Number]) -> str:
-        def my_format(pct):
+    def autopct(values: Iterable[float]) -> Callable[[Any], Any]:  # type:ignore[type-var]
+        def my_format(pct: Any) -> Any:
             total = sum(values)
             val = pct * total / 100.0
             fmt = "%1.1f%%" % pct
@@ -363,7 +372,7 @@ def plot_turnover_categories(_turnover_per_category: dict[ShilaBookingCategory, 
         return my_format
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.pie(values, autopct=autopct(values), labels=labels, startangle=0, labeldistance=1.04, colors=colors, textprops={"fontsize": "14"})
+    ax.pie(values, autopct=autopct(values), labels=list(labels), startangle=0, labeldistance=1.04, colors=colors, textprops={"fontsize": "14"})
     # ax.legend(loc="upper center", labels=labels, bbox_to_anchor=(0.5, -0.05), shadow=True, ncol=2)
     # ax.set_title("Umsatz pro Kategorie", fontsize="23")
     plt.grid(True)

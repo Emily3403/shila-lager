@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import re
 import time
+from collections import defaultdict
 from datetime import datetime
-from math import isclose
 from pathlib import Path
 
 import pytz
+from math import isclose
 from pypdf import PdfReader
 
-from shila_lager.frontend.apps.rechnungen.crud import create_invoice
+from shila_lager.frontend.apps.bestellung.crud import get_beverage_crates, get_sorted_grihed_prices, get_sorted_sale_prices
+from shila_lager.frontend.apps.bestellung.models import BeverageCrate, GrihedPrice, SalePrice
+from shila_lager.frontend.apps.rechnungen.crud import create_invoice, get_grihed_invoices
 from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice
 from shila_lager.settings import manual_upload_dir, logger
 from shila_lager.utils import german_price_to_decimal
@@ -34,7 +37,7 @@ item_regex = re.compile((
 # @formatter:on
 
 
-def import_grihed_pdf(pdf_path: Path) -> GrihedInvoice | None:
+def import_grihed_pdf(pdf_path: Path, beverages: dict[str, BeverageCrate], grihed_prices: defaultdict[str, list[GrihedPrice]], sale_prices: defaultdict[str, list[SalePrice]], existing_invoices: set[GrihedInvoice]) -> GrihedInvoice | None:
     reader = PdfReader(pdf_path)
     pdf = "\n\n\n".join(page.extract_text(extraction_mode="layout") for page in reader.pages)
 
@@ -51,20 +54,37 @@ def import_grihed_pdf(pdf_path: Path) -> GrihedInvoice | None:
         logger.error(f"Total price could not be parsed in {pdf_path}")
         return None
 
-    invoice = create_invoice(invoice_number, date, total_price, unparsed_items)
+    expected_date, expected_invoice_number = pdf_path.stem.split(" ")
+    if expected_date != date.strftime("%Y-%m-%d") or expected_invoice_number != invoice_number:
+        logger.error(
+            f"Date or invoice number mismatch in {pdf_path}!\n"
+            f"Expected: \"{expected_date} {expected_invoice_number}\"\n"
+            f"Actual:   \"{date.strftime('%Y-%m-%d')} {invoice_number}\""
+        )
+        return None
+
+    invoice = create_invoice(invoice_number, date, total_price, unparsed_items, beverages, grihed_prices, sale_prices, existing_invoices)
+    if invoice is None:
+        return None
+
     if not isclose(sum(item.calculated_total_price for item in invoice.items.all()), total_price):
-        logger.error(f"Total price mismatch in {pdf_path}")
-        for item in invoice.items.all():
-            logger.error(f"{item.quantity}x {item.beverage.name} for {item.calculated_total_price}€")
+        logger.error(
+            f"\nTotal price mismatch in {pdf_path}:\n" +
+            "\n".join(f'    {item.beverage.name}: expected {item.total_price}, got {item.calculated_total_price}' for item in invoice.items.all() if not isclose(item.calculated_total_price, item.total_price)) +
+            "\n\n"
+        )
         return None
 
     return invoice
 
 
-def import_all_grihed_pdfs() -> None:
+def import_all_grihed_pdfs() -> list[GrihedInvoice]:
+    beverages, grihed_prices, sale_prices, invoices = get_beverage_crates(), get_sorted_grihed_prices(), get_sorted_sale_prices(), get_grihed_invoices()
     s = time.perf_counter()
     items = []
-    for pdf_path in (manual_upload_dir / "Grihed").iterdir():
-        items.append(import_grihed_pdf(pdf_path))
 
-    print(f"Importing all Grihed PDFs ({len(items)}) took {time.perf_counter() - s:3f}s")
+    for pdf_path in (manual_upload_dir / "Grihed").iterdir():
+        items.append(import_grihed_pdf(pdf_path, beverages, grihed_prices, sale_prices, invoices))
+
+    logger.info(f"Importing all Grihed PDFs ({len(items)}) took {time.perf_counter() - s:3f}s")
+    return [it for it in items if it is not None]

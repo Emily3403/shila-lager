@@ -3,11 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
+
+import pytz
 from math import isclose
 
-from shila_lager.frontend.apps.bestellung.crud import get_sorted_grihed_prices, create_grihed_price, get_beverage_crates, create_beverage_crate, get_sorted_sale_prices
-from shila_lager.frontend.apps.bestellung.models import BottleType, GrihedPrice, SalePrice
-from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice, GrihedInvoiceItem, ShilaAccountBooking
+from shila_lager.frontend.apps.bestellung.crud import create_grihed_price, create_beverage_crate
+from shila_lager.frontend.apps.bestellung.models import BottleType, GrihedPrice, SalePrice, BeverageCrate
+from shila_lager.frontend.apps.rechnungen.beverage_facts import soli_ids
+from shila_lager.frontend.apps.rechnungen.models import GrihedInvoice, GrihedInvoiceItem, ShilaAccountBooking, ShilaInventoryCount
 from shila_lager.settings import logger
 from shila_lager.utils import german_price_to_decimal
 
@@ -29,6 +32,7 @@ sale_price_translation = {
     ("B1040", "Berliner Kindl Jubiläums Pilsener 0,50l"): 1.5 * 20,
     ("B1047", "Berliner Kindl Radler (trüb)"): 1 * 20,
     ("B1053", "Berliner Pilsner 0,33l"): 1 * 24,
+    ("B1092", "Budweiser Budvar 0,50l"): 1.5 * 20,
     ("W8010", "C. Jacob Gr. Burgunder (Pfalz) trocken"): 6,
     ("W8012", "C. Jacob weisser Burgunder (Pfalz) trocken"): 6,
     ("W8033", "Chardonnay IGT Mezzadro"): 6,
@@ -80,7 +84,11 @@ sale_price_translation = {
     ("E3450", "Th. Henry Mate Mate"): 1 * 20,
     ("B1278", "Wicküler Pilsener 0,50l"): 1 * 20,
     ("W8900", "Wodka Gorbatschow 37,5%"): 9,
+    ("W8920", "Smirnoff Vodka 37,5%  0,70l"): 11.85,
+    ("W8922", "Smirnoff Vodka 37,5%  1,00l"): 14.15,
     ("K5230", "aro Zucker Kg-Packung"): 0,
+    ("S2040", "WeserGold Sauerkirschnektar 50% Tetra"): 14,
+    ("S2466", "Granini Multi EW"): 14,
     ("L0008", "leere Einzelflasche Mw (Bier)"): 0.08,
 }
 
@@ -116,10 +124,10 @@ def maybe_create_grihed_price(prices: defaultdict[str, list[GrihedPrice]], bever
 def maybe_create_sale_price(prices: defaultdict[str, list[SalePrice]], beverage_id: str, beverage_name: str, valid_from: datetime) -> SalePrice:
     price = sale_price_translation.get((beverage_id, beverage_name))
     if price is None:
-        raise ValueError(f"No price found for beverage {beverage_id} {beverage_name}")
+        raise ValueError(f"No price found for beverage (\"{beverage_id}\", \"{beverage_name}\")")
 
     def create_price() -> SalePrice:
-        final_price = SalePrice(crate_id=beverage_id, price=price, valid_from=valid_from)
+        final_price = SalePrice(crate_id=beverage_id, price=price, valid_from=pytz.UTC.localize(datetime(2023, 10, 1)))
         final_price.save()
         prices[beverage_id].append(final_price)
         prices[beverage_id].sort(key=lambda it: it.valid_from, reverse=True)
@@ -145,41 +153,63 @@ def maybe_create_sale_price(prices: defaultdict[str, list[SalePrice]], beverage_
     return create_price()
 
 
-def create_invoice(invoice_number: str, date: datetime, total_price: Decimal, items: list[tuple[str, str, str, str, str, str, str, str]]) -> GrihedInvoice:
-    invoice, _ = GrihedInvoice.objects.update_or_create(invoice_number=invoice_number, date=date, total_price=total_price)
-    invoice.save()
+def create_invoice(
+    invoice_number: str, date: datetime, total_price: Decimal, items: list[tuple[str, str, str, str, str, str, str, str]],
+    beverages: dict[str, BeverageCrate], grihed_prices: defaultdict[str, list[GrihedPrice]], sale_prices: defaultdict[str, list[SalePrice]], existing_invoices: set[GrihedInvoice]
+) -> GrihedInvoice | None:
+    invoice = GrihedInvoice(invoice_number=invoice_number, date=date, total_price=total_price)
+    if invoice in existing_invoices:
+        return None
 
-    beverages = get_beverage_crates()
-    grihed_prices = get_sorted_grihed_prices()
-    sale_prices = get_sorted_sale_prices()
+    invoice.save()
+    invoice_items_to_create = []
+
+    # Soli items get a bonus credit if you purchase more than 11 of them. So, it has to be spread evenly over all soli items
+    total_soli_count = sum(Decimal(item[0]) for item in items if item[1].replace(" ", "") in soli_ids)
+    soli_credit = sum(german_price_to_decimal(item[7]) or 0 for item in items if item[0] == "####")
 
     for item in items:
         _quantity, _beverage_id, name, content, bottle_type, _deposit, _price, _total = item
+        if _quantity == "####":
+            continue
 
-        quantity = int(1 if _quantity == "####" else _quantity)
+        quantity = int(_quantity)
         beverage_id = _beverage_id.replace(" ", "")
         deposit = german_price_to_decimal(_deposit)
         total = german_price_to_decimal(_total)
-        price = german_price_to_decimal(_price) if _quantity != "####" else total
+        price = german_price_to_decimal(_price)
 
         if price is None or deposit is None or total is None:
             logger.error(f"Price could not be parsed in {invoice_number} for {name}")
             continue
 
+        if beverage_id in soli_ids:
+            quantity_dec = Decimal(quantity)  # This is needed for mypy as it complains otherwise
+            total += soli_credit * (quantity_dec / total_soli_count)
+            price += soli_credit * (quantity_dec / total_soli_count) / quantity_dec
+            assert isclose((price + deposit) * quantity_dec, total), f"{(price + deposit) * quantity_dec} != {total} for {name}"
+
         beverage = beverages.get(beverage_id) or create_beverage_crate(beverage_id, name, content, BottleType.from_str(bottle_type, beverage_id))
         grihed_price = maybe_create_grihed_price(grihed_prices, beverage_id, price, deposit, date)
         sale_price = maybe_create_sale_price(sale_prices, beverage_id, name, date)
 
-        invoice_item, _ = GrihedInvoiceItem.objects.update_or_create(
-            quantity=int(quantity), total_price=total, invoice=invoice, beverage=beverage, purchase_price=grihed_price, sale_price=sale_price
-        )
-        invoice_item.save()
+        invoice_item = GrihedInvoiceItem(quantity=int(quantity), total_price=total, invoice=invoice, beverage=beverage, purchase_price=grihed_price, sale_price=sale_price)
+        invoice_items_to_create.append(invoice_item)
 
-        if invoice_item.calculated_total_price != total:
-            logger.error(f"Total price mismatch in {invoice_number} for {name}")
+        if not isclose(invoice_item.calculated_total_price, invoice_item.total_price):
+            logger.error(f"Total price mismatch in {invoice_number} for {name}: expected {invoice_item.total_price}, got {invoice_item.calculated_total_price}")
 
+    GrihedInvoiceItem.objects.bulk_create(invoice_items_to_create)
     return invoice
+
+
+def get_grihed_invoices() -> set[GrihedInvoice]:
+    return set(GrihedInvoice.objects.all())
 
 
 def get_shila_account_bookings() -> set[ShilaAccountBooking]:
     return set(ShilaAccountBooking.objects.all())
+
+
+def get_inventory_counts() -> set[ShilaInventoryCount]:
+    return set(ShilaInventoryCount.objects.all())

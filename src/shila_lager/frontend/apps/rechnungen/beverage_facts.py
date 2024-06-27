@@ -25,12 +25,17 @@ meta_categories = {
     "Wasser": ("#0073e4", ["Wasser"]),
 }
 
-current_inventory = {
-    ("L0150", "Leergutkasten komplett"): 10,  # Leerer kasten, 1.5€
-    ("L0310", "Leergutkasten komplett"): 14,  # Bier, 3.1€
-    ("L0450", "Leergutkasten komplett"): 7,  # Mate, 4.5€
-    ("L0330", "Leergutkasten komplett"): 3,  # Wasser, 3.3€
-    ("L0342", "Leergutkasten komplett"): 2,  # Berliner, 3.42€
-    ("L0246", "Leergutkasten komplett"): 2,  # Bionade, 2.46€
-
+digest_categories = {
+    "Bier": ["B1278", "B1183", "B1165", "B1040", "B0995", "B1345", "B1357", "B1047", "B0996", "B1035", "B1053", "B1245", "B1225", "B0991", "B1092"],
+    "Softdrinks": ["E3433", "E3438", "E3445", "E3450", "E3446", "E3451", "E3456", "E3122", "E3125", "E3126", "E3127", "E3128", "E3130", "E3132", "E3347", "E3351", "E3354", "E3416", "E3417", "E3418", "E3419"],
+    "Wasser / Apfelschorle": ["E3224", "M4135", "M4195"],
+    "Sekt / Wein": ["O7040", "O7060", "O7185", "W8010", "W8012", "W8017", "W8019", "W8021", "W8025", "W8028", "W8033"],
 }
+
+# In digestions, this is which beverages should be actually analyzed as the same
+collapse_categories = {
+    "O7060": ["O7040", "O7060", "O7185"],
+    "W8021": ["W8010", "W8012", "W8017", "W8019", "W8021", "W8025", "W8028", "W8033"],
+}
+
+soli_ids = {"E3451", "E3456"}

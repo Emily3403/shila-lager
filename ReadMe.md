@@ -1,6 +1,6 @@
 # Shila Lager
 
-This is the software we use to run the Shila Lager website. 
+This is the software we use to run the Shila Lager website.
 
 ## Installation
 
