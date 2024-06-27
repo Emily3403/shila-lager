@@ -3,13 +3,18 @@ from __future__ import annotations
 import logging.config
 import os
 import platform
+import re
 import sys
 from decimal import Decimal
 from pathlib import Path
 from typing import NoReturn
 
-error_text = "\033[1;91mError:\033[0m"
-warning_text = "\033[1;33mWarning:\033[0m"
+bright_color = "\033[1;1m"
+underline_color = "\033[1;4m"
+reset_color = "\033[0m"
+
+error_text = f"\033[1;91mError:{reset_color}"
+warning_text = f"\033[1;33mWarning:{reset_color}"
 
 
 def error_exit(code: int, reason: str) -> NoReturn:
@@ -17,11 +22,17 @@ def error_exit(code: int, reason: str) -> NoReturn:
     os._exit(code)
 
 
+def get_env(name: str, default: str) -> str:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value
+
+
 # --- General settings ---
 
 # The directory where everything lives in.
-user_set_working_dir = os.environ.get("SHILA_LAGER_WORKING_DIR")
-working_dir_location = Path(user_set_working_dir).expanduser() if user_set_working_dir is not None else Path(os.path.expanduser("~"), "shila-lager")
+working_dir_location = Path(get_env("SHILA_LAGER_WORKING_DIR", "~/shila-lager")).expanduser()
 
 manual_upload_dir = working_dir_location / "manual-uploads"
 plot_output_dir = working_dir_location / "plots"
@@ -89,12 +100,12 @@ APP_DIR = FRONTEND_DIR / "apps"
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!  TODO: Log an error if no secret key is provided
-SECRET_KEY = os.environ.get("SHILA_LAGER_SECRET_KEY") or "django-insecure-w9n&-4vb#dkay9*856z6b$@k(f+j82-ayp^_xj5-qkt9cnfv7d"
+SECRET_KEY = get_env("SHILA_LAGER_SECRET_KEY", "django-insecure-w9n&-4vb#dkay9*856z6b$@k(f+j82-ayp^_xj5-qkt9cnfv7d")
 
 # SECURITY WARNING: don"t run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = os.environ.get("SHILA_LAGER_SERVER_NAMES", "").split(" ")
+ALLOWED_HOSTS = get_env("SHILA_LAGER_SERVER_NAMES", "").split(" ")
 
 # Application definition
 
@@ -251,3 +262,15 @@ logger = logging.getLogger("shila-lager")
 # --- Grihed Options ---
 
 empty_crate_price = Decimal(1.5)
+
+grihed_booking_date_regex = re.compile(r"RE(\d+-\d+) vo[nm] (\d{2}\.\d{2}\.\d{4})")
+grihed_temp_str = "TEMP:"
+grihed_description = lambda number, date: f"{grihed_temp_str} RE{number} vom {date.strftime('%d.%m.%Y')} Getraenkelieferung"
+
+grihed_creditor_id = get_env("SHILA_LAGER_GRIHED_CREDITOR_ID", "")
+grihed_mandate_reference = get_env("SHILA_LAGER_GRIHED_MANDATE_REFERENCE", "")
+grihed_beneficiary_or_payer = get_env("SHILA_LAGER_GRIHED_BENEFICIARY_OR_PAYER", "")
+grihed_iban = get_env("SHILA_LAGER_GRIHED_IBAN", "")
+grihed_bic = get_env("SHILA_LAGER_GRIHED_BIC", "")
+grihed_currency = get_env("SHILA_LAGER_GRIHED_CURRENCY", "")
+grihed_additional_info = get_env("SHILA_LAGER_GRIHED_ADDITIONAL_INFO", "")

@@ -3,9 +3,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from shila_lager.frontend.apps.rechnungen.crud import get_shila_account_bookings
+from shila_lager.frontend.apps.rechnungen.crud import get_shila_account_bookings, get_grihed_invoices
 from shila_lager.frontend.apps.rechnungen.models import ShilaAccountBooking, ShilaBookingKind
-from shila_lager.settings import manual_upload_dir, logger
+from shila_lager.settings import manual_upload_dir, logger, grihed_creditor_id, grihed_mandate_reference, grihed_description, grihed_beneficiary_or_payer, grihed_iban, grihed_bic, grihed_currency, grihed_additional_info, grihed_booking_date_regex
 from shila_lager.utils import german_price_to_decimal
 
 
@@ -67,11 +67,45 @@ def import_booking_csv(csv_path: Path) -> list[ShilaAccountBooking] | None:
     return ShilaAccountBooking.objects.bulk_create(bookings_to_create)
 
 
-def import_bookings() -> None:
+def import_grihed_non_booked_items() -> list[ShilaAccountBooking]:
+    invoices = get_grihed_invoices()
+    bookings = get_shila_account_bookings()
+    booked_invoice_numbers: set[str] = set()
+
+    # First pass: Remove old temp bookings
+    for booking in bookings:
+        if booking.beneficiary_or_payer != grihed_beneficiary_or_payer:
+            continue
+
+        if booking.is_temp:
+            booking.delete()
+            continue
+
+        booked_invoice_numbers.update({it for it, _ in grihed_booking_date_regex.findall(booking.description)})
+
+    # Second pass: Add new temp bookings
+    bookings_to_add = []
+    for invoice in invoices:
+        if invoice.invoice_number in booked_invoice_numbers:
+            continue
+
+        bookings_to_add.append(ShilaAccountBooking(
+            booking_date=datetime.now().date(), value_date=datetime.now().date(), kind=ShilaBookingKind.lastschrift, description=grihed_description(invoice.invoice_number, invoice.date),
+            creditor_id=grihed_creditor_id, mandate_reference=grihed_mandate_reference, customer_reference=None, collector_reference=None, original_amount=None, chargeback_amount=None,
+            beneficiary_or_payer=grihed_beneficiary_or_payer, iban=grihed_iban, bic=grihed_bic, amount=-invoice.total_price, currency=grihed_currency, additional_info=grihed_additional_info
+        ))
+        # logger.info(f"Added booking for {invoice.invoice_number} ({invoice.date})")
+
+    return ShilaAccountBooking.objects.bulk_create(bookings_to_add)
+
+
+def import_bookings() -> list[ShilaAccountBooking]:
     s = time.perf_counter()
     items = []
     for csv_path in (manual_upload_dir / "Sparkasse").iterdir():
         items.append(import_booking_csv(csv_path))
 
-    print(f"Importing all Bookings took {time.perf_counter() - s:3f}s")
-    pass
+    import_grihed_non_booked_items()
+
+    logger.info(f"Importing all Bookings took {time.perf_counter() - s:3f}s")
+    return [it for item in items if item is not None for it in item]
