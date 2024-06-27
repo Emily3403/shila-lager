@@ -6,9 +6,10 @@ from asyncio import AbstractEventLoop, get_event_loop
 from datetime import datetime, date
 from decimal import Decimal
 from pathlib import Path
-from typing import TypeVar, Callable, Iterable
+from typing import TypeVar, Callable, Iterable, Any
 
-from numpy._typing import NDArray
+from django.utils.dateparse import parse_datetime
+from pytz import UTC
 
 from shila_lager.settings import is_linux, is_macos, is_windows, working_dir_location, database_url, manual_upload_dir, plot_output_dir
 from shila_lager.version import __version__
@@ -55,6 +56,10 @@ def get_input(allowed: set[str]) -> str:
 
 def flat_map(func: Callable[[T], Iterable[U]], it: Iterable[T]) -> Iterable[U]:
     return itertools.chain.from_iterable(map(func, it))
+
+
+def reverse_dict(it: dict[T, list[U]]) -> dict[U, T]:
+    return {value: key for key, values in it.items() for value in values}
 
 
 def get_async_time(event_loop: AbstractEventLoop | None = None) -> float:
@@ -119,16 +124,56 @@ def german_price_to_decimal(price: str) -> Decimal | None:
         return None
 
 
-def filter_by_datetime(it: datetime, start: datetime | None, end: datetime | None) -> bool:
+def parse_numeric(it: str | float | int) -> Decimal:
+    if isinstance(it, (float, int)):
+        return Decimal(it)
+
+    try:
+        return Decimal(eval(it))
+    except Exception:
+        print(it)
+        raise
+
+
+def filter_by_date(it: date | datetime, start: date | datetime | None, end: date | datetime | None) -> bool:
+    match it:
+        # Always put datetime first as it is a subclass of date
+        case datetime():
+            return _filter_by_datetime(it, to_datetime(start), to_datetime(end))
+        case date():
+            return _filter_by_date(it, to_date(start), to_date(end))
+
+
+def _filter_by_datetime(it: datetime, start: datetime | None, end: datetime | None) -> bool:
     return (start is None or it >= start) and (end is None or it <= end)
 
 
-def filter_by_date(it: date, start: datetime | None, end: datetime | None) -> bool:
-    return (start is None or it >= start.date()) and (end is None or it <= end.date())
+def _filter_by_date(it: date, start: date | None, end: date | None) -> bool:
+    return (start is None or it > start) and (end is None or it <= end)
 
 
-def autopct_pie_format_with_number(values: NDArray[float], cond: Callable[[float], bool] | None = None, autopct: str = "%1.1f%%") -> Callable[[float], str]:
-    def my_format(pct: NDArray[float]) -> str:
+def to_date(it: date | datetime | None) -> date | None:
+    match it:
+        case None:
+            return None
+        case datetime():
+            return it.date()
+        case date():
+            return it
+
+
+def to_datetime(it: date | datetime | None) -> datetime | None:
+    match it:
+        case None:
+            return None
+        case datetime():
+            return it
+        case date():
+            return datetime(it.year, it.month, it.day)
+
+
+def autopct_pie_format_with_number(values: Iterable[float], cond: Callable[[float], bool] | None = None, autopct: str = "%1.1f%%") -> Callable[[float], str]:
+    def my_format(pct: Any) -> Any:
         total = sum(values)
         val = pct * total / 100.0
         fmt = autopct % pct
@@ -139,8 +184,21 @@ def autopct_pie_format_with_number(values: NDArray[float], cond: Callable[[float
     return my_format
 
 
+def parse_and_localize_date(date_str: str) -> datetime | None:
+    it = parse_datetime(date_str)
+    if it is None:
+        return None
+    return UTC.localize(it)
+
+
 # -/- More or less useful functions ---
 
 T = TypeVar("T")
 U = TypeVar("U")
 KT = TypeVar("KT")
+
+# Type aliases
+BeverageID = str
+DepositCategory = Decimal
+
+zero = Decimal(0)
